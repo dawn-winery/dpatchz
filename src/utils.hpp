@@ -1,0 +1,68 @@
+#pragma once
+
+#include "logging.hpp"
+
+#include <fstream>
+#include <iomanip>
+#include <vector>
+#include <sstream>
+#include <cstring>
+
+#define MALFORMED(file, fmt, ...)                                       \
+    do {                                                                \
+        dwhbll::console::fatal("Malformed diff file at offset 0x{:X}",  \
+                               static_cast<size_t>(file.tellg()));      \
+        dwhbll::console::fatal(fmt, ##__VA_ARGS__);                     \
+        exit(1);                                                        \
+    } while(0)
+
+#define MATCH_BYTES(file, N, cmp)                                                   \
+    do {                                                                            \
+        auto bytes = read_bytes(file, N);                                           \
+        if(memcmp(bytes.data(), cmp, N) != 0)                                       \
+            MALFORMED(file, "MATCH_BYTES failed:\n Expected: '{}'\n Actual: '{}'",  \
+                      cmp, format_bytes(bytes.data(), N));                          \
+    } while(0)
+
+#define MATCH_UNTIL(file, target, cmp)                                              \
+    do {                                                                            \
+        auto bytes = read_until(file, target);                                      \
+        if(memcmp(bytes.data(), cmp, bytes.size()) != 0)                            \
+            MALFORMED(file, "MATCH_UNTIL failed:\n Expected: '{}'\n Actual: '{}'",  \
+                      cmp, format_bytes(bytes.data(), bytes.size()));               \
+    } while(0)
+
+inline std::string format_bytes(const uint8_t* data, size_t n) {
+    std::ostringstream oss;
+    for (size_t i = 0; i < n; ++i) {
+        if (i > 0) oss << " ";
+        oss << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)data[i];
+    }
+    return oss.str();
+}
+
+inline std::vector<uint8_t> read_bytes(std::ifstream &file, size_t N) {
+    std::vector<uint8_t> buffer(N);
+    if(!file.read(reinterpret_cast<char*>(buffer.data()), N))
+        MALFORMED(file, "Unexpected EOF while reading {} bytes", N);
+
+    return buffer;
+}
+
+inline std::vector<uint8_t> read_until(std::ifstream &file, uint8_t target) {
+    std::vector<uint8_t> buffer;
+    while(1) {
+        uint8_t next = file.peek();
+        if(static_cast<uint8_t>(next) == target)
+            break;
+
+        char byte;
+        file.get(byte);
+        buffer.push_back(static_cast<uint8_t>(byte));
+    }
+
+    if(file.eof())
+        MALFORMED(file, "Unexpected EOF while reading until {:c}", target);
+
+    return buffer;
+}

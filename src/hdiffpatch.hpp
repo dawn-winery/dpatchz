@@ -23,42 +23,6 @@ struct VarInt {
     }
 };
 
-struct DirDiff {
-    std::string compressionType;
-    std::string checksumType;
-
-    bool oldPathIsDir;
-    bool newPathIsDir;
-
-    VarInt oldPathCount;
-    VarInt oldPathSumSize;
-    VarInt newPathCount;
-    VarInt newPathSumSize;
-    VarInt oldRefFileCount;
-    VarInt oldRefSize;
-    VarInt newRefFileCount;
-    VarInt newRefSize;
-    VarInt sameFilePairCount;
-    VarInt sameFileSize;
-    VarInt newExecuteCount;
-    VarInt privateReservedDataSize;
-    VarInt privateExternDataSize;
-    VarInt externDataSize;
-    
-    VarInt headDataSize;
-    VarInt headDataCompressedSize;
-    VarInt checksumByteSize;
-
-    // size: checksumByteSize
-    std::vector<uint8_t> checksum;
-
-    // These 2 are most likely not needed, from testing they always have size 0
-    // size: privateExternDataSize
-    std::vector<uint8_t> privateExternalData;
-    // size: externDataSize
-    std::vector<uint8_t> externData;
-};
-
 struct DiffZ {
     std::string compressType;
 
@@ -95,4 +59,43 @@ struct HeadData {
     // Checksums?
     // size: newRefFileCount
     std::vector<VarInt> unknown;
+};
+
+struct DirDiff {
+    std::string compressionType;
+    std::string checksumType;
+
+    bool oldPathIsDir;
+    bool newPathIsDir;
+
+    VarInt oldPathCount;
+    VarInt oldPathSumSize;
+    VarInt newPathCount;
+    VarInt newPathSumSize;
+    VarInt oldRefFileCount;
+    VarInt oldRefSize;
+    VarInt newRefFileCount;
+    VarInt newRefSize;
+    VarInt sameFilePairCount;
+    VarInt sameFileSize;
+    VarInt newExecuteCount;
+    VarInt privateReservedDataSize;
+    VarInt privateExternDataSize;
+    VarInt externDataSize;
+    
+    VarInt headDataSize;
+    VarInt headDataCompressedSize;
+    VarInt checksumByteSize;
+
+    // size: checksumByteSize
+    std::vector<uint8_t> checksum;
+
+    // These 2 are most likely not needed, from testing they always have size 0
+    // size: privateExternDataSize
+    std::vector<uint8_t> privateExternalData;
+    // size: externDataSize
+    std::vector<uint8_t> externData;
+
+    HeadData headData;
+    DiffZ mainDiff;
 };

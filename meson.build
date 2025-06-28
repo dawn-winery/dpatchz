@@ -6,11 +6,12 @@ project(
 )
 
 source_files = [
-  'src/main.cpp'
+  'src/main.cpp',
+  'src/logging.cpp'
 ]
 
 executable(
   meson.project_name(),
   source_files,
-  include_directories: include_directories('thirdparty')
+  include_directories: include_directories(['thirdparty', 'src'])
 )

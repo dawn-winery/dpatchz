@@ -1,4 +1,29 @@
 #include "../thirdparty/argparse.hpp"
+#include "src/hdiffpatch.hpp"
+#include "logging.hpp"
+#include "src/utils.hpp"
+
+#include <sys/mman.h>
+
+
+DirDiff parse(std::filesystem::path path) {
+    // Parsing is done with ifstream then once we have actually have to
+    // patch the files we use mmap to load the newDataDiff section 
+    std::ifstream file(path, std::ios::binary);
+    DirDiff diff;
+
+    MATCH_UNTIL(file, '&', "HDIFF19");
+    MATCH_BYTES(file, 1, "&");
+
+    MATCH_UNTIL(file, '&', "zstd");
+    diff.compressionType = "zstd";
+
+    MATCH_BYTES(file, 1, "&");
+    MATCH_UNTIL(file, '\0', "fadler64");
+    diff.compressionType = "fadler64";
+
+    return diff;
+}
 
 int main(int argc, char** argv) {
     argparse::ArgumentParser program("dpatchz");
@@ -23,5 +48,24 @@ int main(int argc, char** argv) {
     std::filesystem::path source_dir = program.get<std::string>("source_dir");
     std::filesystem::path output_dir = program.get<std::string>("output_dir");
 
-    
+    if(!std::filesystem::exists(diff_path) || std::filesystem::is_directory(diff_path)) {
+        dwhbll::console::fatal("{} doesn't exist or is not a file", diff_path.string());
+        return 1;
+    }
+    if(!std::filesystem::exists(source_dir) || !std::filesystem::is_directory(source_dir)) {
+        dwhbll::console::fatal("{} doesn't exist or is not a directory", source_dir.string());
+        return 1;
+    }
+    if(std::filesystem::exists(output_dir)) {
+        if(!std::filesystem::is_directory(output_dir)) {
+            dwhbll::console::fatal("{} exists and is not a directory", output_dir.string());
+            return 1;
+        }
+        else if(!std::filesystem::is_empty(output_dir)) {
+            dwhbll::console::fatal("{} exists and is not empty", output_dir.string());
+            return 1;
+        }
+    }
+
+    DirDiff diff = parse(diff_path);
 }
