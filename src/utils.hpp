@@ -2,7 +2,6 @@
 
 #include "logging.hpp"
 
-#include <fstream>
 #include <iomanip>
 #include <vector>
 #include <sstream>
@@ -50,7 +49,7 @@ inline std::string format_bytes(const uint8_t* data, size_t n) {
     return oss.str();
 }
 
-inline std::vector<uint8_t> read_bytes(std::ifstream &file, size_t N) {
+inline std::vector<uint8_t> read_bytes(std::istream &file, size_t N) {
     std::vector<uint8_t> buffer(N);
     if(!file.read(reinterpret_cast<char*>(buffer.data()), N))
         MALFORMED(file, "Unexpected EOF while reading {} bytes", N);
@@ -58,19 +57,24 @@ inline std::vector<uint8_t> read_bytes(std::ifstream &file, size_t N) {
     return buffer;
 }
 
-inline std::vector<uint8_t> read_until(std::ifstream &file, uint8_t target) {
-    std::vector<uint8_t> buffer;
+template <typename Container = std::vector<uint8_t>>
+inline Container read_until(std::istream &file, uint8_t target) {
+    Container buffer;
     while(1) {
-        uint8_t next = file.peek();
-        if(static_cast<uint8_t>(next) == target)
+        int next = file.peek();
+        if(next == EOF || static_cast<uint8_t>(next) == target)
             break;
 
         char byte;
         file.get(byte);
-        buffer.push_back(static_cast<uint8_t>(byte));
+
+        if constexpr (std::is_same<Container, std::string>())
+            buffer.push_back(byte);
+        else 
+            buffer.push_back(static_cast<uint8_t>(byte));
     }
 
-    if(file.eof())
+    if(file.peek())
         MALFORMED(file, "Unexpected EOF while reading until {:c}", target);
 
     return buffer;

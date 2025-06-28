@@ -3,16 +3,7 @@
 #include "logging.hpp"
 
 #include <sys/mman.h>
-
-
-DirDiff parse(std::filesystem::path path) {
-    // Parsing is done with ifstream then once we have actually have to
-    // patch the files we use mmap to load the newDataDiff section 
-    std::ifstream file(path, std::ios::binary);
-    DirDiff diff = DirDiff::parse(file);
-
-    return diff;
-}
+#include <fstream>
 
 int main(int argc, char** argv) {
     argparse::ArgumentParser program("dpatchz");
@@ -63,7 +54,10 @@ int main(int argc, char** argv) {
         }
     }
 
-    DirDiff diff = parse(diff_path);
-    dwhbll::console::debug("{}", diff.to_string());
+    std::ifstream file(diff_path, std::ios::binary);
+    DirDiff diff = DirDiff::parse(file);
+    file.close();
 
+    dwhbll::console::debug("Parsed diff file:\n{}\n{}\n{}", diff.to_string(), 
+                           diff.headData.to_string(), diff.mainDiff.to_string());
 }

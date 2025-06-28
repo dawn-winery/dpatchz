@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <string>
-#include <fstream>
 #include <vector>
 
 /*
@@ -12,7 +11,7 @@
 struct VarInt {
     uint64_t value;
     
-    static VarInt parse(std::ifstream &input);
+    static VarInt parse(std::istream &input);
 };
 
 struct DiffZ {
@@ -30,27 +29,35 @@ struct DiffZ {
     VarInt compressedRleCodeBufSize;
     VarInt newDataDiffSize;
     VarInt compressedNewDataDiffSize;
+
+    static DiffZ parse(std::istream& file);
+    std::string to_string();
+};
+
+struct File {
+    std::string oldName;
+    std::string newName;
+
+    uint8_t oldFileOffset;
+    uint8_t newFileOffset;
+
+    uint64_t oldFileSize;
+    uint64_t newFileSize;
+};
+
+struct Directory {
+    std::string oldName;
+    std::string newName;
 };
 
 struct HeadData {
-    // size: oldPathCount
-    std::vector<std::string> oldFiles;
-    // size: newPathCount
-    std::vector<std::string> newFiles;
+    std::vector<File> files;
+    std::vector<Directory> dirs;
 
-    // size: oldRefFileCount
-    std::vector<uint8_t> oldFileOffsets;
-    // size: newRefFileCount
-    std::vector<uint8_t> newFileOffsets;
-
-    // size: oldRefFileCount
-    std::vector<VarInt> oldFileSizes;
-    // size: newRefFileCount
-    std::vector<VarInt> newFileSizes;
-
-    // Checksums?
-    // size: newRefFileCount
-    std::vector<VarInt> unknown;
+    static HeadData parse(std::istream& file, uint64_t size, uint64_t compressed_size, 
+                          uint64_t old_path_count, uint64_t new_path_count,
+                          uint64_t old_ref_file_count, uint64_t new_ref_file_count);
+    std::string to_string();
 };
 
 struct DirDiff {
@@ -87,6 +94,6 @@ struct DirDiff {
     HeadData headData;
     DiffZ mainDiff;
 
-    static DirDiff parse(std::ifstream& file);
+    static DirDiff parse(std::istream& file);
     std::string to_string();
 };

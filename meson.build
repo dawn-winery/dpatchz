@@ -11,8 +11,11 @@ source_files = [
   'src/parsing.cpp'
 ]
 
+zstd = dependency('libzstd')
+
 executable(
   meson.project_name(),
   source_files,
-  include_directories: include_directories(['thirdparty', 'src'])
+  include_directories: include_directories(['thirdparty', 'src']),
+  dependencies: [zstd]
 )
