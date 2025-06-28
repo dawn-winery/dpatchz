@@ -1,0 +1,16 @@
+project(
+  'dpatchz',
+  'cpp',
+  license: 'GPL-3.0',
+  default_options: ['cpp_std=c++23'],
+)
+
+source_files = [
+  'src/main.cpp'
+]
+
+executable(
+  meson.project_name(),
+  source_files,
+  include_directories: include_directories('thirdparty')
+)
