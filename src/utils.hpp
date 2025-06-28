@@ -7,6 +7,7 @@
 #include <vector>
 #include <sstream>
 #include <cstring>
+#include <cassert>
 
 #define MALFORMED(file, fmt, ...)                                       \
     do {                                                                \
@@ -16,12 +17,12 @@
         exit(1);                                                        \
     } while(0)
 
-#define MATCH_BYTES(file, N, cmp)                                                   \
+#define MATCH_BYTES(file, cmp)                                                      \
     do {                                                                            \
-        auto bytes = read_bytes(file, N);                                           \
-        if(memcmp(bytes.data(), cmp, N) != 0)                                       \
+        auto bytes = read_bytes(file, sizeof(cmp) - 1);                             \
+        if(memcmp(bytes.data(), cmp, sizeof(cmp) - 1) != 0)                         \
             MALFORMED(file, "MATCH_BYTES failed:\n Expected: '{}'\n Actual: '{}'",  \
-                      cmp, format_bytes(bytes.data(), N));                          \
+                      cmp, format_bytes(bytes.data(), sizeof(cmp) - 1));            \
     } while(0)
 
 #define MATCH_UNTIL(file, target, cmp)                                              \
@@ -30,6 +31,14 @@
         if(memcmp(bytes.data(), cmp, bytes.size()) != 0)                            \
             MALFORMED(file, "MATCH_UNTIL failed:\n Expected: '{}'\n Actual: '{}'",  \
                       cmp, format_bytes(bytes.data(), bytes.size()));               \
+    } while(0)
+
+#define MATCH_VARINT(file, check)                                                   \
+    do {                                                                            \
+        VarInt v = VarInt::parse(file);                                             \
+        if(v.value != check)                                                        \
+            MALFORMED(file, "MATCH_VARINT failed:\n Expected: '{}'\n Actual: '{}'", \
+                      check, v.value);                                              \
     } while(0)
 
 inline std::string format_bytes(const uint8_t* data, size_t n) {

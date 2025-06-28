@@ -7,7 +7,8 @@ project(
 
 source_files = [
   'src/main.cpp',
-  'src/logging.cpp'
+  'src/logging.cpp',
+  'src/parsing.cpp'
 ]
 
 executable(

@@ -1,7 +1,6 @@
 #include "../thirdparty/argparse.hpp"
-#include "src/hdiffpatch.hpp"
+#include "src/parsing.hpp"
 #include "logging.hpp"
-#include "src/utils.hpp"
 
 #include <sys/mman.h>
 
@@ -10,17 +9,7 @@ DirDiff parse(std::filesystem::path path) {
     // Parsing is done with ifstream then once we have actually have to
     // patch the files we use mmap to load the newDataDiff section 
     std::ifstream file(path, std::ios::binary);
-    DirDiff diff;
-
-    MATCH_UNTIL(file, '&', "HDIFF19");
-    MATCH_BYTES(file, 1, "&");
-
-    MATCH_UNTIL(file, '&', "zstd");
-    diff.compressionType = "zstd";
-
-    MATCH_BYTES(file, 1, "&");
-    MATCH_UNTIL(file, '\0', "fadler64");
-    diff.compressionType = "fadler64";
+    DirDiff diff = DirDiff::parse(file);
 
     return diff;
 }
@@ -31,9 +20,11 @@ int main(int argc, char** argv) {
     program.add_argument("diff_file");
     program.add_argument("source_dir");
     program.add_argument("output_dir")
-        .help("Has to not exist or be empty")
-        .nargs(1)
-        .default_value("");
+        .help("Has to not exist or be empty");
+
+    program.add_argument("-v", "--verbose")
+        .default_value(false)
+        .implicit_value(true);
 
     try {
         program.parse_args(argc, argv);
@@ -42,6 +33,11 @@ int main(int argc, char** argv) {
         std::cerr << err.what() << std::endl;
         std::cerr << program;
         return 1;
+    }
+
+    bool verbose = program.get<bool>("verbose");
+    if(verbose) {
+        dwhbll::console::defaultLevel = dwhbll::console::Level::DEBUG;
     }
 
     std::filesystem::path diff_path = program.get<std::string>("diff_file");
@@ -68,4 +64,6 @@ int main(int argc, char** argv) {
     }
 
     DirDiff diff = parse(diff_path);
+    dwhbll::console::debug("{}", diff.to_string());
+
 }

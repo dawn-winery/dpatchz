@@ -5,22 +5,14 @@
 #include <fstream>
 #include <vector>
 
+/*
+ * Headers that roughly describe the structure of a hdiffz diff file
+ * Some fields are not left out because not used in parsing (or we know kuro sets them to 0)
+ */
 struct VarInt {
     uint64_t value;
     
-    static VarInt parse(std::ifstream input) {
-        uint8_t b;
-        uint64_t res;
-        input.read(reinterpret_cast<char*>(&b), 1);
-        res = b & 0x7f;
-
-        while(b & 0x80) {
-            input.read(reinterpret_cast<char*>(&b), 1);
-            res = (res << 7) | (b & 0x7f);
-        }
-
-        return VarInt { res };
-    }
+    static VarInt parse(std::ifstream &input);
 };
 
 struct DiffZ {
@@ -76,12 +68,14 @@ struct DirDiff {
     VarInt oldRefSize;
     VarInt newRefFileCount;
     VarInt newRefSize;
-    VarInt sameFilePairCount;
-    VarInt sameFileSize;
-    VarInt newExecuteCount;
-    VarInt privateReservedDataSize;
-    VarInt privateExternDataSize;
-    VarInt externDataSize;
+
+    // Supposedly always equal to 0
+    // VarInt sameFilePairCount;
+    // VarInt sameFileSize;
+    // VarInt newExecuteCount;
+    // VarInt privateReservedDataSize;
+    // VarInt privateExternDataSize;
+    // VarInt externDataSize;
     
     VarInt headDataSize;
     VarInt headDataCompressedSize;
@@ -90,12 +84,9 @@ struct DirDiff {
     // size: checksumByteSize
     std::vector<uint8_t> checksum;
 
-    // These 2 are most likely not needed, from testing they always have size 0
-    // size: privateExternDataSize
-    std::vector<uint8_t> privateExternalData;
-    // size: externDataSize
-    std::vector<uint8_t> externData;
-
     HeadData headData;
     DiffZ mainDiff;
+
+    static DirDiff parse(std::ifstream& file);
+    std::string to_string();
 };
