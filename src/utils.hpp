@@ -1,111 +1,73 @@
 #pragma once
 
-#include "logging.hpp"
-
 #include <iomanip>
-#include <vector>
 #include <sstream>
 #include <cstring>
 #include <cassert>
 #include <zstd.h>
 
-#define MALFORMED(file, fmt, ...)                                       \
-    do {                                                                \
-        dwhbll::console::fatal("Malformed diff file at offset 0x{:X}",  \
-                               static_cast<size_t>(file.tellg()));      \
-        dwhbll::console::fatal(fmt, ##__VA_ARGS__);                     \
-        exit(1);                                                        \
-    } while(0)
+typedef uint8_t u8;
+typedef uint64_t u64;
+typedef int64_t i64;
 
-#define MATCH_BYTES(file, cmp)                                                      \
-    do {                                                                            \
-        auto bytes = read_bytes(file, sizeof(cmp) - 1);                             \
-        if(memcmp(bytes.data(), cmp, sizeof(cmp) - 1) != 0)                         \
-            MALFORMED(file, "MATCH_BYTES failed:\n Expected: '{}'\n Actual: '{}'",  \
-                      cmp, format_bytes(bytes.data(), sizeof(cmp) - 1));            \
-    } while(0)
+template <typename T>
+concept Byte = std::is_same_v<T, u8> || std::is_same_v<T, char>;
 
-#define MATCH_UNTIL(file, target, cmp)                                              \
-    do {                                                                            \
-        auto bytes = read_until(file, target);                                      \
-        if(memcmp(bytes.data(), cmp, bytes.size()) != 0)                            \
-            MALFORMED(file, "MATCH_UNTIL failed:\n Expected: '{}'\n Actual: '{}'",  \
-                      cmp, format_bytes(bytes.data(), bytes.size()));               \
-    } while(0)
+struct VectorStreamBuf : std::streambuf {
+    VectorStreamBuf(const u8* data, size_t size) {
+        char* p = const_cast<char*>(reinterpret_cast<const char*>(data));
+        setg(p, p, p + size);
+    }
 
-#define MATCH_VARINT(file, check)                                                   \
-    do {                                                                            \
-        VarInt v = VarInt::parse(file);                                             \
-        if(v.value != check)                                                        \
-            MALFORMED(file, "MATCH_VARINT failed:\n Expected: '{}'\n Actual: '{}'", \
-                      check, v.value);                                              \
-    } while(0)
+    // Overrides needed for tellg() to work properly
+    std::streampos seekoff(std::streamoff off, std::ios_base::seekdir way,
+                          std::ios_base::openmode which = std::ios_base::in) override {
+        if (which != std::ios_base::in) return -1;
+        
+        char* new_pos = nullptr;
+        switch (way) {
+            case std::ios_base::beg:
+                new_pos = eback() + off;
+                break;
+            case std::ios_base::cur:
+                new_pos = gptr() + off;
+                break;
+            case std::ios_base::end:
+                new_pos = egptr() + off;
+                break;
+            default:
+                return -1;
+        }
+        
+        if (new_pos < eback() || new_pos > egptr()) return -1;
+        
+        setg(eback(), new_pos, egptr());
+        return new_pos - eback();
+    }
+    
+    std::streampos seekpos(std::streampos sp,
+                          std::ios_base::openmode which = std::ios_base::in) override {
+        return seekoff(sp, std::ios_base::beg, which);
+    }
+};
 
-inline std::string format_bytes(const uint8_t* data, size_t n) {
+class VectorIStream : public std::istream {
+public:
+    VectorIStream(const u8* data, size_t size)
+        : std::istream(nullptr), buf_(data, size) {
+        rdbuf(&buf_);
+    }
+
+private:
+    VectorStreamBuf buf_;
+};
+
+template <Byte T>
+std::string format_bytes(const T* data, size_t n) {
     std::ostringstream oss;
     for (size_t i = 0; i < n; ++i) {
         if (i > 0) oss << " ";
         oss << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)data[i];
     }
     return oss.str();
-}
-
-inline std::vector<uint8_t> read_bytes(std::istream &file, size_t N) {
-    std::vector<uint8_t> buffer(N);
-    if(!file.read(reinterpret_cast<char*>(buffer.data()), N))
-        MALFORMED(file, "Unexpected EOF while reading {} bytes", N);
-
-    return buffer;
-}
-
-template <typename Container = std::vector<uint8_t>>
-inline Container read_until(std::istream &file, uint8_t target) {
-    Container buffer;
-    while(1) {
-        int next = file.peek();
-        if(next == EOF || static_cast<uint8_t>(next) == target)
-            break;
-
-        char byte;
-        file.get(byte);
-
-        if constexpr (std::is_same<Container, std::string>())
-            buffer.push_back(byte);
-        else 
-            buffer.push_back(static_cast<uint8_t>(byte));
-    }
-
-    if(file.peek())
-        MALFORMED(file, "Unexpected EOF while reading until {:c}", target);
-
-    return buffer;
-}
-
-inline std::vector<uint8_t> read_maybe_compressed_data(std::istream& file, uint64_t compressed_size, 
-                                                uint64_t size) {
-    std::vector<uint8_t> data;
-    // Data is not compressed
-    if(compressed_size > 0) {
-        std::vector<uint8_t> compressed_data = read_bytes(file, compressed_size);
-        uint64_t decompressed_size = ZSTD_getFrameContentSize(compressed_data.data(), compressed_size);
-        if(decompressed_size == ZSTD_CONTENTSIZE_ERROR 
-            || decompressed_size == ZSTD_CONTENTSIZE_UNKNOWN
-            || decompressed_size != size) {
-            MALFORMED(file, "Failed to get HeadData uncompressed size");
-        }
-
-        data.resize(decompressed_size);
-        size_t result = ZSTD_decompress(data.data(), decompressed_size, compressed_data.data(),
-                                        compressed_size);
-        if(ZSTD_isError(result)) {
-            MALFORMED(file, "ZSTD_decompress on HeadData failed");
-            exit(1);
-        }
-    }
-    // Data is not compressed
-    else {
-        data = read_bytes(file, size);
-    }
-
-    return data;
 }

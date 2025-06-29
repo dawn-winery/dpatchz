@@ -55,9 +55,12 @@ int main(int argc, char** argv) {
     }
 
     std::ifstream file(diff_path, std::ios::binary);
-    DirDiff diff = DirDiff::parse(file);
-    file.close();
+    Parser parser(file);
+    DirDiff diff = DirDiff::parse(parser);
 
-    dwhbll::console::debug("Parsed diff file:\n{}\n{}\n{}", diff.to_string(), 
-                           diff.headData.to_string(), diff.mainDiff.to_string());
+    dwhbll::console::debug("Parsed diff file:\n{}\n{}\n{}\n{}", diff.to_string(), 
+                           diff.headData.to_string(), diff.mainDiff.to_string(),
+                           diff.mainDiff.coverBuf.to_string());
+
+    file.close();
 }
