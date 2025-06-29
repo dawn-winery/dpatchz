@@ -6,12 +6,26 @@
 
 /*
  * Headers that roughly describe the structure of a hdiffz diff file
- * Some fields are not left out because not used in parsing (or we know kuro sets them to 0)
+ * Some fields are left out because not used in parsing (or we know kuro sets them to 0)
  */
 struct VarInt {
     uint64_t value;
     
-    static VarInt parse(std::istream &input);
+    static VarInt parse(std::istream &input, uint8_t kTagBit = 0);
+};
+
+struct CoverBuf {
+    struct Cover {
+        uint64_t oldPos;
+        uint64_t newPos;
+        uint64_t length;
+    };
+
+    std::vector<Cover> covers;
+
+    static CoverBuf parse(std::istream& file, uint64_t compressed_size, 
+                         uint64_t size, uint64_t covert_count);
+    std::string to_string();
 };
 
 struct DiffZ {
@@ -29,6 +43,8 @@ struct DiffZ {
     VarInt compressedRleCodeBufSize;
     VarInt newDataDiffSize;
     VarInt compressedNewDataDiffSize;
+
+    CoverBuf coverBuf;
 
     static DiffZ parse(std::istream& file);
     std::string to_string();

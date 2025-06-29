@@ -11,7 +11,12 @@ struct membuf: std::streambuf {
         char* p(const_cast<char*>(base));
         this->setg(p, p, p + size);
     }
+
+    std::streamsize chars_read() const {
+        return gptr() - eback();
+    }
 };
+
 struct imemstream: virtual membuf, std::istream {
     imemstream(char const* base, size_t size)
         : membuf(base, size)
@@ -19,21 +24,45 @@ struct imemstream: virtual membuf, std::istream {
     }
 };
 
-VarInt VarInt::parse(std::istream &input) {
-    uint8_t b;
-    uint64_t res;
-    if(!input.read(reinterpret_cast<char*>(&b), 1))
-        MALFORMED(input, "Unexpected EOF while reading VarInt");
-    res = b & 0x7f;
+VarInt VarInt::parse(std::istream &input, uint8_t kTagBit) {
+    uint8_t byte;
+    input.read(reinterpret_cast<char*>(&byte), 1);
+    uint64_t res = byte & ((1 << (7 - kTagBit)) - 1);
 
-    while(b & 0x80) {
-        if(!input.read(reinterpret_cast<char*>(&b), 1))
-            MALFORMED(input, "Unexpected EOF while reading VarInt");
-        res = (res << 7) | (b & 0x7f);
+    if ((byte & (1 << (7 - kTagBit))) != 0) {
+        do {
+            input.read(reinterpret_cast<char*>(&byte), 1);
+            uint64_t nextBits = byte & 0x7F;
+            res = (res << 7) | nextBits;
+        } while ((byte & 0x80) != 0);
     }
 
-    return VarInt { res };
+    return { res };
 }
+
+CoverBuf CoverBuf::parse(std::istream& file, uint64_t compressed_size, 
+                         uint64_t size, uint64_t covert_count) {
+    CoverBuf buf;
+
+    std::vector<uint8_t> data = read_maybe_compressed_data(file, compressed_size, size);
+    imemstream data_stream(reinterpret_cast<char*>(data.data()), data.size());
+
+    assert(data.size() == size);
+
+    for(int i = 0; i < covert_count; i++) {
+        Cover cover;
+        cover.oldPos = VarInt::parse(data_stream, 1).value;
+        cover.newPos = VarInt::parse(data_stream).value;
+        cover.length = VarInt::parse(data_stream).value;
+        buf.covers.push_back(cover);
+    }
+
+    assert(size == data_stream.chars_read());
+
+    return buf;
+}
+
+std::string CoverBuf::to_string() {}
 
 DiffZ DiffZ::parse(std::istream& file) {
     DiffZ diff;
@@ -52,6 +81,9 @@ DiffZ DiffZ::parse(std::istream& file) {
     diff.compressedRleCodeBufSize = VarInt::parse(file);
     diff.newDataDiffSize = VarInt::parse(file);
     diff.compressedNewDataDiffSize = VarInt::parse(file);
+
+    diff.coverBuf = CoverBuf::parse(file, diff.compressedCoverBufSize.value,
+                                    diff.coverBufSize.value, diff.coverCount.value);
 
     return diff;
 }
@@ -89,7 +121,7 @@ std::string DiffZ::to_string() {
     return s;
 }
 
-HeadData HeadData::parse(std::istream& file, uint64_t size, uint64_t compressed_size,
+HeadData HeadData::parse(std::istream& file, uint64_t compressed_size, uint64_t size,
                           uint64_t old_path_count, uint64_t new_path_count,
                           uint64_t old_ref_file_count, uint64_t new_ref_file_count) {
     HeadData head;
@@ -99,30 +131,7 @@ HeadData HeadData::parse(std::istream& file, uint64_t size, uint64_t compressed_
     assert(old_path_count == new_path_count);
     assert(old_ref_file_count == new_ref_file_count);
 
-    std::vector<uint8_t> data;
-    // Data is not compressed
-    if(compressed_size > 0) {
-        std::vector<uint8_t> compressed_data = read_bytes(file, compressed_size);
-        uint64_t decompressed_size = ZSTD_getFrameContentSize(compressed_data.data(), compressed_size);
-        if(decompressed_size == ZSTD_CONTENTSIZE_ERROR 
-            || decompressed_size == ZSTD_CONTENTSIZE_UNKNOWN
-            || decompressed_size != size) {
-            MALFORMED(file, "Failed to get HeadData uncompressed size");
-        }
-
-        data.resize(decompressed_size);
-        size_t result = ZSTD_decompress(data.data(), decompressed_size, compressed_data.data(),
-                                        compressed_size);
-        if(ZSTD_isError(result)) {
-            MALFORMED(file, "ZSTD_decompress on HeadData failed");
-            exit(1);
-        }
-    }
-    // Data is not compressed
-    else {
-        data = read_bytes(file, size);
-    }
-
+    std::vector<uint8_t> data = read_maybe_compressed_data(file, compressed_size, size);
     imemstream data_stream(reinterpret_cast<char*>(data.data()), data.size());
 
     std::vector<std::string> oldFiles;
@@ -242,7 +251,7 @@ DirDiff DirDiff::parse(std::istream& file) {
     diff.checksumByteSize = VarInt::parse(file);
 
     diff.checksum = read_bytes(file, diff.checksumByteSize.value * 4);
-    diff.headData = HeadData::parse(file, diff.headDataSize.value, diff.headDataCompressedSize.value, 
+    diff.headData = HeadData::parse(file, diff.headDataCompressedSize.value, diff.headDataSize.value, 
                                     diff.oldPathCount.value, diff.newPathCount.value,
                                     diff.oldRefFileCount.value, diff.newRefFileCount.value);
     diff.mainDiff = DiffZ::parse(file);

@@ -7,6 +7,7 @@
 #include <sstream>
 #include <cstring>
 #include <cassert>
+#include <zstd.h>
 
 #define MALFORMED(file, fmt, ...)                                       \
     do {                                                                \
@@ -78,4 +79,33 @@ inline Container read_until(std::istream &file, uint8_t target) {
         MALFORMED(file, "Unexpected EOF while reading until {:c}", target);
 
     return buffer;
+}
+
+inline std::vector<uint8_t> read_maybe_compressed_data(std::istream& file, uint64_t compressed_size, 
+                                                uint64_t size) {
+    std::vector<uint8_t> data;
+    // Data is not compressed
+    if(compressed_size > 0) {
+        std::vector<uint8_t> compressed_data = read_bytes(file, compressed_size);
+        uint64_t decompressed_size = ZSTD_getFrameContentSize(compressed_data.data(), compressed_size);
+        if(decompressed_size == ZSTD_CONTENTSIZE_ERROR 
+            || decompressed_size == ZSTD_CONTENTSIZE_UNKNOWN
+            || decompressed_size != size) {
+            MALFORMED(file, "Failed to get HeadData uncompressed size");
+        }
+
+        data.resize(decompressed_size);
+        size_t result = ZSTD_decompress(data.data(), decompressed_size, compressed_data.data(),
+                                        compressed_size);
+        if(ZSTD_isError(result)) {
+            MALFORMED(file, "ZSTD_decompress on HeadData failed");
+            exit(1);
+        }
+    }
+    // Data is not compressed
+    else {
+        data = read_bytes(file, size);
+    }
+
+    return data;
 }
