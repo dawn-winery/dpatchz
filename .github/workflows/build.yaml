@@ -20,7 +20,7 @@ jobs:
           apt-get install -y --no-install-recommends ninja-build meson g++-14 pkg-config libzstd-dev
       - name: Build
         run: |
-          CXX=g++-14 meson setup build -Ddefault_library=static -Dc_args=-static -Dc_link_args=-static
+          CXX=g++-14 meson setup build -Ddefault_library=static -Dc_args=-static -Dc_link_args=-static --buildtype=release
           meson compile -C build
       - name: Upload artifact
         uses: actions/upload-artifact@v4
