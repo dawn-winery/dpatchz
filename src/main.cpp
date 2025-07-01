@@ -3,8 +3,6 @@
 #include "src/parsing.hpp"
 #include "dwhbll-logging.hpp"
 
-#include <sys/mman.h>
-
 u64 cache_size;
 
 int main(int argc, char** argv) {
@@ -69,13 +67,17 @@ int main(int argc, char** argv) {
                            diff.headData.to_string(), diff.mainDiff.to_string(),
                            diff.mainDiff.coverBuf.to_string());
 
-    // Kuro diffs don't seem to have RLE
+    // Kuro diffs don't seem to be using RLE so we just ignore it
     // TODO: implement RLE anyway
-    assert(diff.mainDiff.rleCodeBufSize.value == 0);
-    assert(diff.mainDiff.rleCtrlBufSize.value > 0);
-    assert(diff.mainDiff.compressedRleCodeBufSize.value == 0);
-    assert(diff.mainDiff.compressedRleCtrlBufSize.value == 0);
-    parser.read_bytes<u8>(diff.mainDiff.rleCtrlBufSize.value);
+    if(diff.mainDiff.compressedRleCodeBufSize.value > 0)
+        parser.read_bytes<u8>(diff.mainDiff.compressedRleCodeBufSize.value);
+    else
+        parser.read_bytes<u8>(diff.mainDiff.rleCodeBufSize.value);
+
+    if(diff.mainDiff.compressedRleCtrlBufSize.value > 0)
+        parser.read_bytes<u8>(diff.mainDiff.compressedRleCtrlBufSize.value);
+    else
+        parser.read_bytes<u8>(diff.mainDiff.rleCtrlBufSize.value);
 
     diff.mainDiff.newDataOffset = parser.position();
 
