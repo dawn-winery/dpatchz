@@ -159,7 +159,7 @@ HeadData HeadData::parse(Parser &parser, u64 size, u64 compressed_size,
         }
     }
 
-    for(size_t i = 0, j = 0; i < old_path_count; i++) {
+    for(size_t i = 0, j = 0; i < new_path_count; i++) {
         if(newFiles[i].ends_with('/') || newFiles[i].empty()) {
             head.newDirs.push_back(Directory(newFiles[i]));
         }

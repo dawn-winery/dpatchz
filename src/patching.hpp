@@ -9,6 +9,7 @@ private:
     DirDiff diff;
     std::ifstream mem;
     u64 current_index = 0;
+    File* cur_file;
 
     ZSTD_DStream* dstream = nullptr;
     std::vector<u8> inBuf;
@@ -16,21 +17,23 @@ private:
 
     u64 read(u8* buf, size_t size);
 
+    [[noreturn]] void error(const std::string& message) const;
+
 public:
     explicit Patcher(DirDiff diff, std::filesystem::path diff_file)
         : diff(diff), mem(diff_file), inBuf(CHUNK_SIZE) {
         if (!mem)
-            throw std::runtime_error("Failed to open diff file");
+            error(std::format("Failed to open diff file {}", diff_file.string()));
 
         mem.seekg(diff.mainDiff.newDataOffset, std::ios::beg);
 
         dstream = ZSTD_createDStream();
         if (!dstream)
-            throw std::runtime_error("Failed to create ZSTD_DStream");
+            error("Failed to create ZSTD_DStream");
 
         size_t const initResult = ZSTD_initDStream(dstream);
         if (ZSTD_isError(initResult))
-            throw std::runtime_error("ZSTD_initDStream error");
+            error("ZSTD_initDStream error");
     }
 
     ~Patcher() {

@@ -33,13 +33,20 @@ u64 Patcher::read(u8* buf, size_t size) {
     return size;
 }
 
+void Patcher::error(const std::string &err) const {
+    if(cur_file)
+        dwhbll::console::fatal("Error while patching {}: {}", cur_file->name, err);
+    else
+        dwhbll::console::fatal("Error while patching: {}", cur_file->name, err);
+    std::exit(1);
+}
 
 void Patcher::patch(std::filesystem::path source, std::filesystem::path dest) {
     std::unique_ptr<VirtualFilesystemBuffer> read_buffer = std::make_unique<VirtualFilesystemBuffer>();
     for(auto file : diff.headData.oldFiles) {
         read_buffer->add_file(source / file.name);
     }
-    StreamReader reader(std::move(read_buffer));
+    CachedReader reader(std::move(read_buffer));
 
     for(auto dir : diff.headData.newDirs) {
         std::filesystem::create_directory(dest / dir.name);
@@ -48,18 +55,18 @@ void Patcher::patch(std::filesystem::path source, std::filesystem::path dest) {
     auto& covers = diff.mainDiff.coverBuf.covers;
 
     u64 cover_idx = 0;
-    i64 old_pos = covers[0].oldPos;
+    i64 old_pos = 0;
     // u64 new_pos = covers[0].newPos;
     u64 to_read = covers[0].newPos;
     u64 written = 0;
 
     for(size_t i = 0; i < diff.headData.newFiles.size(); i++) {
-        auto& file = diff.headData.newFiles[i];
-        dwhbll::console::info("Patching {} [{}/{}]", (dest / file.name).string(), 
+        cur_file = &diff.headData.newFiles[i];
+        dwhbll::console::info("Patching {} [{}/{}]", (dest / cur_file->name).string(), 
                               i + 1, diff.headData.newFiles.size());
-        std::ofstream f(dest / file.name, std::ios::binary);
-        while(written < file.fileSize) {
-            u64 remaining = file.fileSize - written;
+        std::ofstream f(dest / cur_file->name, std::ios::binary);
+        while(written < cur_file->fileSize) {
+            u64 remaining = cur_file->fileSize - written;
 
             if(to_read == 0 && cover_idx < covers.size()) {
                 // Reading a cover
@@ -70,14 +77,14 @@ void Patcher::patch(std::filesystem::path source, std::filesystem::path dest) {
                 u64 to_write = std::min(cov.length, remaining);
                 std::vector<u8> v;
                 if(!reader.seek(old_pos)) {
-                    // error("Error while seeking in vfs");
+                    error("Error while seeking in vfs");
                 }
                 if(!reader.read_bytes(v, to_write)) {
-                    // error("Unexpected EOF");
+                    error("Unexpected EOF");
                 }
                 assert(v.size() == to_write);
                 if(!f.write(reinterpret_cast<char*>(v.data()), to_write)) {
-                    // error(std::format("Failed to write to {}", dest / file.fileName));
+                    error(std::format("Failed to write to {}", (dest / cur_file->name).string()));
                 }
 
                 written += to_write;
@@ -113,7 +120,7 @@ void Patcher::patch(std::filesystem::path source, std::filesystem::path dest) {
             }
         }
         written = 0;
-        dwhbll::console::info("Successfully patched {} [{}/{}]", (dest / file.name).string(), 
+        dwhbll::console::info("Successfully patched {} [{}/{}]", (dest / cur_file->name).string(), 
                               i + 1, diff.headData.newFiles.size());
     }
     dwhbll::console::info("Everything patched with success (hopefully)");
