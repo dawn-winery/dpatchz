@@ -1,0 +1,30 @@
+name: Release
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:plucky
+    steps:
+      - name: Install Node
+        run: |
+          apt-get update -y
+          apt-get install -y --no-install-recommends nodejs npm
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          apt-get install -y --no-install-recommends ninja-build meson g++-14 pkg-config libzstd-dev
+      - name: Build
+        run: |
+          CXX=g++-14 meson setup build -Ddefault_library=static -Dc_args=-static -Dc_link_args=-static
+          meson compile -C build
+      - name: Release
+        uses: ncipollo/release-action@v1
+        with:
+          name: dpatchz ${{ github.ref_name }}
+          artifacts: build/dpatchz
