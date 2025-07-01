@@ -7,8 +7,9 @@ project(
 
 source_files = [
   'src/main.cpp',
-  'src/logging.cpp',
-  'src/parsing.cpp'
+  'src/dwhbll-logging.cpp',
+  'src/parsing.cpp',
+  'src/patching.cpp'
 ]
 
 zstd = dependency('libzstd')

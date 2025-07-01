@@ -1,9 +1,9 @@
 #include "../thirdparty/argparse.hpp"
+#include "patching.hpp"
 #include "src/parsing.hpp"
-#include "logging.hpp"
+#include "dwhbll-logging.hpp"
 
 #include <sys/mman.h>
-#include <fstream>
 
 int main(int argc, char** argv) {
     argparse::ArgumentParser program("dpatchz");
@@ -54,13 +54,23 @@ int main(int argc, char** argv) {
         }
     }
 
-    std::ifstream file(diff_path, std::ios::binary);
-    Parser parser(file);
+    Parser parser(diff_path);
     DirDiff diff = DirDiff::parse(parser);
 
     dwhbll::console::debug("Parsed diff file:\n{}\n{}\n{}\n{}", diff.to_string(), 
                            diff.headData.to_string(), diff.mainDiff.to_string(),
                            diff.mainDiff.coverBuf.to_string());
 
-    file.close();
+    // Kuro diffs don't seem to have RLE
+    // TODO: implement RLE anyway
+    assert(diff.mainDiff.rleCodeBufSize.value == 0);
+    assert(diff.mainDiff.rleCtrlBufSize.value > 0);
+    assert(diff.mainDiff.compressedRleCodeBufSize.value == 0);
+    assert(diff.mainDiff.compressedRleCtrlBufSize.value == 0);
+    parser.read_bytes<u8>(diff.mainDiff.rleCtrlBufSize.value);
+
+    diff.mainDiff.newDataOffset = parser.position();
+
+    Patcher patcher(diff, diff_path);
+    patcher.patch(source_dir, output_dir);
 }

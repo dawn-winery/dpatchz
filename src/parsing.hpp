@@ -1,7 +1,7 @@
 #pragma once
 
+#include "dwhbll-streams.hpp"
 #include "utils.hpp"
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -43,6 +43,9 @@ struct DiffZ {
     VarInt newDataDiffSize, compressedNewDataDiffSize;
 
     CoverBuf coverBuf;
+
+    // Offset of the newDataBuf section from the start of the file
+    u64 newDataOffset;
 
     static DiffZ parse(Parser& parser);
     std::string to_string();
@@ -102,23 +105,27 @@ struct DirDiff {
     std::string to_string();
 };
 
+using namespace dwhbll::collections::stream;
+
 class Parser {
 private:
-    std::istream* stream_;  // Changed from reference to pointer
-    std::unique_ptr<VectorIStream> owned_stream_;  // For sub-parsers
+    std::unique_ptr<dwhbll::collections::stream::Reader> stream_;
     std::string context_;
 
-    [[noreturn]] void error(const std::string& message);
+    [[noreturn]] void error(const std::string& message) const;
     std::string format_context() const;
 
 public:
-    explicit Parser(std::istream &stream, std::string context = "")
-        : stream_(&stream), context_(context) {}
+    explicit Parser(std::string path, std::string context = "")
+        : stream_(std::make_unique<CachedReader>(std::make_unique<FileBuffer>(path))), 
+          context_(context) {}
 
-    explicit Parser(std::unique_ptr<VectorIStream> stream, std::string context = "")
-        : stream_(stream.get()), owned_stream_(std::move(stream)), context_(context) {}
+    explicit Parser(std::unique_ptr<Reader> stream, std::string context = "")
+        : stream_(std::move(stream)), context_(context) {}
 
-    std::streampos position() const { return stream_->tellg(); }
+    uint32_t position() const {
+        return stream_->position();
+    }
 
     // Ensures that exactly `b` bytes have been read, otherwise errors out
     void check_read(u64 b);
@@ -136,28 +143,25 @@ public:
 
     template <Byte T>
     std::vector<T> read_bytes(size_t n) {
-        std::vector<T> buffer(n);
-        if(!stream_->read(reinterpret_cast<char*>(buffer.data()), n))
+        std::vector<T> buffer;
+        if (!stream_->read_bytes(buffer, n))
             error(std::format("Unexpected EOF while reading {} bytes", n));
+        return buffer;
+    }
 
+    std::string read_string() {
+        std::string buffer;
+        if(!stream_->read_string(buffer))
+            error("Unexpected EOF while reading a string");
         return buffer;
     }
 
     // Consumes c
-    template <Byte T = u8, typename Container = std::vector<T>>
-    Container read_until(T c) {
-        Container buffer;
-        T b;
-        while(true) {
-            if(!stream_->read(reinterpret_cast<char*>(&b), 1))
-                error(std::format("Unexpected EOF while reading until 0x{:02X}", c));
-
-            if(b != c)
-                buffer.push_back(b);
-            else 
-                break;
-        }
-
+    template <Byte T = u8>
+    std::vector<T> read_until(T c) {
+        std::vector<T> buffer;
+        if (!stream_->read_until(buffer, c, true))
+            error(std::format("Unexpected EOF while reading until {}", c));
         return buffer;
     }
 

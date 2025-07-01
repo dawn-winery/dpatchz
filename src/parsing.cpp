@@ -1,6 +1,6 @@
 #include "parsing.hpp"
 
-#include "logging.hpp"
+#include "dwhbll-logging.hpp"
 #include "utils.hpp"
 
 #include <zstd.h>
@@ -107,7 +107,6 @@ HeadData HeadData::parse(Parser &parser, u64 size, u64 compressed_size,
     HeadData head;
 
     std::vector<u8> data = parser.read_maybe_compressed(size, compressed_size);
-    VectorIStream data_stream(data.data(), data.size());
 
     std::vector<std::string> oldFiles;
     std::vector<std::string> newFiles;
@@ -125,13 +124,13 @@ HeadData HeadData::parse(Parser &parser, u64 size, u64 compressed_size,
     Parser sub_parser = parser.sub_parser(data, "head_data");
 
     for(size_t i = 0; i < old_path_count; i++)
-        oldFiles.push_back(sub_parser.read_until<char, std::string>('\0'));
+        oldFiles.push_back(sub_parser.read_string());
     for(size_t i = 0; i < new_path_count; i++)
-        newFiles.push_back(sub_parser.read_until<char, std::string>('\0'));
+        newFiles.push_back(sub_parser.read_string());
 
     for(size_t i = 0; i < old_ref_file_count; i++) {
         VarInt v = sub_parser.read_varint();
-        // Still haven't found an offset larger than a byte, but we keep a sanity check
+        // Still haven't found an offset larger than a byte, but still keep a sanity check
         assert(v.value < 128);
         oldFileOffsets.push_back(v.value);
     }
@@ -309,7 +308,7 @@ std::string DirDiff::to_string() {
     return s;
 }   
 
-void Parser::error(const std::string &err) {
+void Parser::error(const std::string &err) const {
     dwhbll::console::fatal("Parse error at {}: {}", format_context(), err);
     std::exit(1);
 }
@@ -354,8 +353,9 @@ std::vector<u8> Parser::read_maybe_compressed(u64 size, u64 compressed_size) {
 }
 
 Parser Parser::sub_parser(const std::vector<u8>& data, const std::string& sub_context) {
-    auto stream = std::make_unique<VectorIStream>(data.data(), data.size());
-    return Parser(std::move(stream), format_context() + " -> " + sub_context);
+    auto buffer = std::make_unique<MemoryBuffer>(data);
+    return Parser(std::make_unique<CachedReader>(std::move(buffer)), 
+                  format_context() + " -> " + sub_context);
 }
 
 VarInt Parser::read_varint(u8 kTagBit) {
