@@ -5,6 +5,8 @@
 
 #include <sys/mman.h>
 
+u64 cache_size;
+
 int main(int argc, char** argv) {
     argparse::ArgumentParser program("dpatchz");
 
@@ -16,6 +18,11 @@ int main(int argc, char** argv) {
     program.add_argument("-v", "--verbose")
         .default_value(false)
         .implicit_value(true);
+
+    program.add_argument("-c", "--cache")
+        .help("Size in bytes of the read cache. Higher values should decrease time spent on I/O but increase memory usage. Default: 4096")
+        .default_value(4096)
+        .scan<'i', int>();
 
     try {
         program.parse_args(argc, argv);
@@ -34,6 +41,7 @@ int main(int argc, char** argv) {
     std::filesystem::path diff_path = program.get<std::string>("diff_file");
     std::filesystem::path source_dir = program.get<std::string>("source_dir");
     std::filesystem::path output_dir = program.get<std::string>("output_dir");
+    cache_size = program.get<int>("-c");
 
     if(!std::filesystem::exists(diff_path) || std::filesystem::is_directory(diff_path)) {
         dwhbll::console::fatal("{} doesn't exist or is not a file", diff_path.string());

@@ -117,7 +117,7 @@ private:
 
 public:
     explicit Parser(std::string path, std::string context = "")
-        : stream_(std::make_unique<CachedReader>(std::make_unique<FileBuffer>(path))), 
+        : stream_(std::make_unique<CachedReader>(std::make_unique<FileBuffer>(path), cache_size)), 
           context_(context) {}
 
     explicit Parser(std::unique_ptr<Reader> stream, std::string context = "")

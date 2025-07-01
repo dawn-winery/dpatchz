@@ -46,7 +46,7 @@ void Patcher::patch(std::filesystem::path source, std::filesystem::path dest) {
     for(auto file : diff.headData.oldFiles) {
         read_buffer->add_file(source / file.name);
     }
-    CachedReader reader(std::move(read_buffer));
+    CachedReader reader(std::move(read_buffer), cache_size);
 
     for(auto dir : diff.headData.newDirs) {
         std::filesystem::create_directory(dest / dir.name);

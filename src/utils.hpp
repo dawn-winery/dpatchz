@@ -13,8 +13,7 @@ typedef int64_t i64;
 template <typename T>
 concept Byte = std::is_same_v<T, u8> || std::is_same_v<T, char>;
 
-static std::size_t ZSTD_INPUT_BUFFER_SIZE = ZSTD_DStreamInSize();
-static std::size_t ZSTD_OUTPUT_BUFFER_SIZE = ZSTD_DStreamOutSize();
+extern u64 cache_size;
 
 template <Byte T>
 std::string format_bytes(const T* data, size_t n) {

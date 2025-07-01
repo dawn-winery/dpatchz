@@ -354,7 +354,7 @@ std::vector<u8> Parser::read_maybe_compressed(u64 size, u64 compressed_size) {
 
 Parser Parser::sub_parser(const std::vector<u8>& data, const std::string& sub_context) {
     auto buffer = std::make_unique<MemoryBuffer>(data);
-    return Parser(std::make_unique<CachedReader>(std::move(buffer)), 
+    return Parser(std::make_unique<CachedReader>(std::move(buffer), cache_size), 
                   format_context() + " -> " + sub_context);
 }
 
