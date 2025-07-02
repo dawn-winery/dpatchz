@@ -18,6 +18,7 @@ private:
     u64 read(u8* buf, size_t size);
 
     [[noreturn]] void error(const std::string& message) const;
+    void merge_dirs(const std::filesystem::path& a, const std::filesystem::path& b);
 
 public:
     explicit Patcher(DirDiff diff, std::filesystem::path diff_file)
@@ -41,5 +42,5 @@ public:
             ZSTD_freeDStream(dstream);
     }
 
-    void patch(std::filesystem::path source, std::filesystem::path dest);
+    void patch(std::filesystem::path source, std::filesystem::path dest, bool inplace);
 };

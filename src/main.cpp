@@ -22,6 +22,11 @@ int main(int argc, char** argv) {
         .default_value(4096)
         .scan<'i', int>();
 
+    program.add_argument("-i")
+        .help("Inplace patching")
+        .default_value(false)
+        .implicit_value(true);
+
     try {
         program.parse_args(argc, argv);
     }
@@ -40,6 +45,7 @@ int main(int argc, char** argv) {
     std::filesystem::path source_dir = program.get<std::string>("source_dir");
     std::filesystem::path output_dir = program.get<std::string>("output_dir");
     cache_size = program.get<int>("-c");
+    bool inplace = program.get<bool>("-i");
 
     if(!std::filesystem::exists(diff_path) || std::filesystem::is_directory(diff_path)) {
         dwhbll::console::fatal("{} doesn't exist or is not a file", diff_path.string());
@@ -82,5 +88,5 @@ int main(int argc, char** argv) {
     diff.mainDiff.newDataOffset = parser.position();
 
     Patcher patcher(diff, diff_path);
-    patcher.patch(source_dir, output_dir);
+    patcher.patch(source_dir, output_dir, inplace);
 }
