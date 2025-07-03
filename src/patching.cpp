@@ -82,12 +82,13 @@ void Patcher::patch(std::filesystem::path source, std::filesystem::path dest, bo
 
     std::filesystem::path destionation_dir = dest;
     if(inplace) {
-        dwhbll::console::info("Patching inplace");
         destionation_dir = get_tmp_dir(source);
+        dwhbll::console::info("Patching inplace to {} (temporary dir)", destionation_dir.string());
+        std::filesystem::create_directory(destionation_dir.string());
     }
 
     for(const auto &dir : diff.headData.newDirs) {
-        std::filesystem::create_directory(destionation_dir / dir.name);
+        std::filesystem::create_directories(destionation_dir / dir.name);
     }
 
     auto& covers = diff.mainDiff.coverBuf.covers;
@@ -166,10 +167,12 @@ void Patcher::patch(std::filesystem::path source, std::filesystem::path dest, bo
         written = 0;
         dwhbll::console::info("Successfully patched {} [{}/{}]", (dest / cur_file->name).string(), 
                               i + 1, diff.headData.newFiles.size());
+    }
 
-        if(inplace) {
-            merge_dirs(source, destionation_dir);
-        }
+    if(inplace) {
+        dwhbll::console::info("Merging temporary directory {} with {}", 
+                              destionation_dir.string(), source.string());
+        merge_dirs(source, destionation_dir);
     }
 
     dwhbll::console::info("Everything patched with success (hopefully)");
