@@ -11,7 +11,8 @@ int main(int argc, char** argv) {
     program.add_argument("diff_file");
     program.add_argument("source_dir");
     program.add_argument("output_dir")
-        .help("Has to not exist or be empty");
+        .help("Has to not exist or be empty")
+        .nargs(0,1);
 
     program.add_argument("-v", "--verbose")
         .default_value(false)
@@ -43,9 +44,13 @@ int main(int argc, char** argv) {
 
     std::filesystem::path diff_path = program.get<std::string>("diff_file");
     std::filesystem::path source_dir = program.get<std::string>("source_dir");
-    std::filesystem::path output_dir = program.get<std::string>("output_dir");
-    cache_size = program.get<int>("-c");
+    std::filesystem::path output_dir;
     bool inplace = program.get<bool>("-i");
+
+    if(!inplace) {
+        output_dir = program.get<std::string>("output_dir");
+    }
+    cache_size = program.get<int>("-c");
 
     if(!std::filesystem::exists(diff_path) || std::filesystem::is_directory(diff_path)) {
         dwhbll::console::fatal("{} doesn't exist or is not a file", diff_path.string());
