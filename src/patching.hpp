@@ -2,6 +2,8 @@
 
 #include "parsing.hpp"
 
+#include <format>
+
 static size_t CHUNK_SIZE = ZSTD_DStreamInSize();
 
 class Patcher {
