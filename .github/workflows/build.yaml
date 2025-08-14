@@ -1,4 +1,4 @@
-name: Build
+name: Test
 on:
   push:
     branches: [ main ]
@@ -23,5 +23,40 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dpatchz-${{ github.sha }}
+          name: dpatchz
           path: build/dpatchz
+
+  # Tests by running dpatchz on some random 2.4.3 -> 2.5.1 partial diffs
+  # We don't patch the whole program because that would take too much storage and time
+  test:
+    runs-on: ubuntu-latest
+    needs: build-and-upload
+    strategy:
+      matrix:
+        diff_number: [ 0, 1, 2, 3, 5, 7]
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: dpatchz
+          path: .
+      - name: Download files
+        run: |
+          # Hardcode for now ig
+          export API="https://hw-pcdownload-qcloud.aki-game.net/launcher/game/G153/50004/2.5.1/IYOwHBLfeAXMxVgHwGybWvvSqiDnPlbs/resource/50004/2.5.1/2.4.3/indexFile.json"
+          export BASE_URL="https://hw-pcdownload-aws.aki-game.net/launcher/game/G153/50004/2.4.3/SZqhxsTkRdyUlZaLhFuJobLKYodsAwan/zip"
+          export PATCH_URL="https://hw-pcdownload-aws.aki-game.net/launcher/game/G153/50004/2.5.0/jLYdEEVBgAgPqJgUZlVztdMPFnUJnRjQ/resource/50004/2.5.0/2.4.3/resources"
+
+          mkdir testfiles
+          curl -sL "$API" | jq -r '.groupInfos[${{ matrix.diff_number }}].srcFiles[].dest' | xargs -I{} -- curl -sOL "$BASE_URL/{}" --output-dir testfiles
+          curl -sL "$API" | jq -r '.groupInfos[${{ matrix.diff_number }}].dest' | xargs -I{} -- curl -sL "$PATCH_URL/{}" -o patch.krpdiff
+          curl -sL "$API" | jq -r '.groupInfos[${{ matrix.diff_number }}].dstFiles[] | "\((.dest | split("/") | .[-1])) \(.md5)"' > checksums.txt
+      - name: Patch
+        run: | 
+          chmod +x ./dpatchz
+          ./dpatchz -v -i patch.krpdiff testfiles results
+      - name: Verify checksum
+        run: |
+          cd results
+          md5sum -c ../checksums.txt
+
