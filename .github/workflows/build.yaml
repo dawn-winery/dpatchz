@@ -42,21 +42,24 @@ jobs:
           path: .
       - name: Download files
         run: |
-          # Hardcode for now ig
           export API="https://hw-pcdownload-qcloud.aki-game.net/launcher/game/G153/50004/2.5.1/IYOwHBLfeAXMxVgHwGybWvvSqiDnPlbs/resource/50004/2.5.1/2.4.3/indexFile.json"
           export BASE_URL="https://hw-pcdownload-aws.aki-game.net/launcher/game/G153/50004/2.4.3/SZqhxsTkRdyUlZaLhFuJobLKYodsAwan/zip"
           export PATCH_URL="https://hw-pcdownload-aws.aki-game.net/launcher/game/G153/50004/2.5.0/jLYdEEVBgAgPqJgUZlVztdMPFnUJnRjQ/resource/50004/2.5.0/2.4.3/resources"
 
           mkdir testfiles
-          curl -sL "$API" | jq -r '.groupInfos[${{ matrix.diff_number }}].srcFiles[].dest' | xargs -I{} -- curl -sOL "$BASE_URL/{}" --output-dir testfiles
-          curl -sL "$API" | jq -r '.groupInfos[${{ matrix.diff_number }}].dest' | xargs -I{} -- curl -sL "$PATCH_URL/{}" -o patch.krpdiff
-          curl -sL "$API" | jq -r '.groupInfos[${{ matrix.diff_number }}].dstFiles[] | "\((.dest | split("/") | .[-1])) \(.md5)"' > checksums.txt
+          curl -L "$API" | jq -r '.groupInfos[${{ matrix.diff_number }}].srcFiles[].dest' \
+            | while read -r RELPATH; do
+                mkdir -p "testfiles/$(dirname "$RELPATH")"
+                curl -L "$BASE_URL/$RELPATH" -o "testfiles/$RELPATH"
+              done
+
+          curl -L "$API" | jq -r '.groupInfos[${{ matrix.diff_number }}].dest' | xargs -I{} -- curl -sL "$PATCH_URL/{}" -o patch.krpdiff
+          curl -L "$API" | jq -r '.groupInfos[${{ matrix.diff_number }}].dstFiles[] | "\(.md5)  \(.dest)"' > checksums.txt
       - name: Patch
         run: | 
           chmod +x ./dpatchz
-          ./dpatchz -v -i patch.krpdiff testfiles results
+          ./dpatchz -v -i patch.krpdiff testfiles
       - name: Verify checksum
         run: |
-          cd results
+          cd testfiles
           md5sum -c ../checksums.txt
-
