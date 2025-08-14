@@ -74,7 +74,7 @@ int main(int argc, char** argv) {
     Parser parser(diff_path);
     DirDiff diff = DirDiff::parse(parser);
 
-    dwhbll::console::debug("Parsed diff file:\n{}\n{}\n{}\n{}", diff.to_string(), 
+    dwhbll::console::debug("Parsed diff file:\n{}\n{}\n{}\n{}\n", diff.to_string(), 
                            diff.headData.to_string(), diff.mainDiff.to_string(),
                            diff.mainDiff.coverBuf.to_string());
 
@@ -94,4 +94,6 @@ int main(int argc, char** argv) {
 
     Patcher patcher(diff, diff_path);
     patcher.patch(source_dir, output_dir, inplace);
+
+    return 0;
 }

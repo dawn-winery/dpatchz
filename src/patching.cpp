@@ -165,8 +165,10 @@ void Patcher::patch(std::filesystem::path source, std::filesystem::path dest, bo
         }
 
         written = 0;
-        dwhbll::console::info("Successfully patched {} [{}/{}]", (dest / cur_file->name).string(), 
-                              i + 1, diff.headData.newFiles.size());
+        dwhbll::console::info("[{}/{}] Successfully patched {}",
+                              i + 1, 
+                              diff.headData.newFiles.size(), 
+                              (dest / cur_file->name).string());
     }
 
     if(inplace) {
