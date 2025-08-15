@@ -1,6 +1,6 @@
 #include "../thirdparty/argparse.hpp"
 #include "patching.hpp"
-#include "src/parsing.hpp"
+#include "parsing.hpp"
 #include "dwhbll-logging.hpp"
 
 u64 cache_size;

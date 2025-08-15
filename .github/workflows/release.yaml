@@ -7,20 +7,21 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    container: alpine:latest
     steps:
       - name: Install Node
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends nodejs npm
+        run: apk -U --no-cache add nodejs npm
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install dependencies
-        run: |
-          sudo apt-get install -y --no-install-recommends ninja-build meson pkg-config libzstd-dev
+        run: apk -U --no-cache add build-base cmake pkgconfig zstd-static zstd-dev curl jq
       - name: Build
         run: |
-          meson setup build -Ddefault_library=static -Dc_args=-static -Dc_link_args=-static --buildtype=release
-          meson compile -C build
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXE_LINKER_FLAGS="-static" \
+            -DCMAKE_FIND_LIBRARY_SUFFIXES=".a"
+          cmake --build build
       - name: Release
         uses: ncipollo/release-action@v1
         with:
