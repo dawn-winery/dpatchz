@@ -11,7 +11,7 @@ int main(int argc, char** argv) {
     program.add_argument("diff_file");
     program.add_argument("source_dir");
     program.add_argument("output_dir")
-        .help("Has to not exist or be empty")
+        .help("Has to not exist or be empty. Ignored if -i is passed")
         .nargs(0,1);
 
     program.add_argument("-v", "--verbose")
@@ -92,8 +92,8 @@ int main(int argc, char** argv) {
 
     diff.mainDiff.newDataOffset = parser.position();
 
-    Patcher patcher(diff, diff_path);
-    patcher.patch(source_dir, output_dir, inplace);
+    Patcher patcher(diff, diff_path, source_dir, output_dir);
+    patcher.patch(inplace);
 
     return 0;
 }

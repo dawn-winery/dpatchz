@@ -52,7 +52,7 @@ struct DiffZ {
     std::string to_string();
 };
 
-struct File {
+struct DiffFile {
     std::string name;
 
     u8 fileOffset;
@@ -64,8 +64,8 @@ struct Directory {
 };
 
 struct HeadData {
-    std::vector<File> oldFiles;
-    std::vector<File> newFiles;
+    std::vector<DiffFile> oldFiles;
+    std::vector<DiffFile> newFiles;
     std::vector<Directory> oldDirs;
     std::vector<Directory> newDirs;
 
@@ -125,7 +125,10 @@ public:
         : stream_(std::move(stream)), context_(context) {}
 
     uint32_t position() const {
-        return stream_->position();
+        auto r = stream_->position();
+        if(!r)
+            error("Error while getting parser position in file");
+        return r.value();
     }
 
     // Ensures that exactly `b` bytes have been read, otherwise errors out
@@ -144,17 +147,17 @@ public:
 
     template <Byte T>
     std::vector<T> read_bytes(size_t n) {
-        std::vector<T> buffer;
-        if (!stream_->read_bytes(buffer, n))
+        auto r = stream_->read_bytes<T>(n);
+        if(!r)
             error(std::format("Unexpected EOF while reading {} bytes", n));
-        return buffer;
+        return r.value();
     }
 
     std::string read_string() {
-        std::string buffer;
-        if(!stream_->read_string(buffer))
+        auto r = stream_->read_string();
+        if(!r)
             error("Unexpected EOF while reading a string");
-        return buffer;
+        return r.value();
     }
 
     // Consumes c

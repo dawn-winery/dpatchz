@@ -6,12 +6,21 @@
 
 static size_t CHUNK_SIZE = ZSTD_DStreamInSize();
 
+struct File {
+    FILE* ptr;
+    DiffFile* file;
+};
+
 class Patcher {
 private:
+    std::filesystem::path source;
+    std::filesystem::path dest;
+
     DirDiff diff;
     std::ifstream mem;
     u64 current_index = 0;
-    File* cur_file;
+    File cur_in_file;
+    DiffFile* cur_out_file;
 
     ZSTD_DStream* dstream = nullptr;
     std::vector<u8> inBuf;
@@ -22,9 +31,12 @@ private:
     [[noreturn]] void error(const std::string& message) const;
     void merge_dirs(const std::filesystem::path& a, const std::filesystem::path& b);
 
+    void update_file(u64 offset);
+
 public:
-    explicit Patcher(DirDiff diff, std::filesystem::path diff_file)
-        : diff(diff), mem(diff_file), inBuf(CHUNK_SIZE) {
+    explicit Patcher(DirDiff diff, std::filesystem::path diff_file, 
+                     std::filesystem::path source_, std::filesystem::path dest_)
+        : diff(diff), mem(diff_file), inBuf(CHUNK_SIZE), source(source_), dest(dest_) {
         if (!mem)
             error(std::format("Failed to open diff file {}", diff_file.string()));
 
@@ -44,5 +56,5 @@ public:
             ZSTD_freeDStream(dstream);
     }
 
-    void patch(std::filesystem::path source, std::filesystem::path dest, bool inplace);
+    void patch(bool inplace);
 };

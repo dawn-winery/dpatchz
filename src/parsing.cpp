@@ -153,7 +153,7 @@ HeadData HeadData::parse(Parser &parser, u64 size, u64 compressed_size,
             head.oldDirs.push_back(Directory(oldFiles[i]));
         }
         else {
-            head.oldFiles.push_back(File(oldFiles[i], oldFileOffsets[j], 
+            head.oldFiles.push_back(DiffFile(oldFiles[i], oldFileOffsets[j], 
                                          oldFileSizes[j].value));
             j++;
         }
@@ -164,7 +164,7 @@ HeadData HeadData::parse(Parser &parser, u64 size, u64 compressed_size,
             head.newDirs.push_back(Directory(newFiles[i]));
         }
         else {
-            head.newFiles.push_back(File(newFiles[i], newFileOffsets[j], 
+            head.newFiles.push_back(DiffFile(newFiles[i], newFileOffsets[j], 
                                          newFileSizes[j].value));
             j++;
         }

@@ -1,5 +1,6 @@
 #include "patching.hpp"
 #include "dwhbll-logging.hpp"
+#include <utility>
 
 u64 Patcher::read(u8* buf, size_t size) {
     if (!buf || size == 0)
@@ -34,10 +35,10 @@ u64 Patcher::read(u8* buf, size_t size) {
 }
 
 void Patcher::error(const std::string &err) const {
-    if(cur_file)
-        dwhbll::console::fatal("Error while patching {}: {}", cur_file->name, err);
+    if(cur_out_file)
+        dwhbll::console::fatal("Error while patching {}: {}", cur_out_file->name, err);
     else
-        dwhbll::console::fatal("Error while patching: {}", cur_file->name, err);
+        dwhbll::console::fatal("Error while patching: {}", cur_out_file->name, err);
     std::exit(1);
 }
 
@@ -73,12 +74,36 @@ void Patcher::merge_dirs(const std::filesystem::path& a, const std::filesystem::
     std::filesystem::remove_all(b);
 }
 
-void Patcher::patch(std::filesystem::path source, std::filesystem::path dest, bool inplace) {
-    std::unique_ptr<VirtualFilesystemBuffer> read_buffer = std::make_unique<VirtualFilesystemBuffer>();
-    for(const auto &file : diff.headData.oldFiles) {
-        read_buffer->add_file(source / file.name);
+void Patcher::update_file(u64 offset) {
+    u64 cur_offset = 0;
+    for(auto &file : diff.headData.oldFiles) {
+        if(cur_offset + file.fileSize >= offset) {
+            if(file.name != cur_in_file.file->name) {
+                // Update the file pointer
+                fclose(cur_in_file.ptr);
+                cur_in_file.file = &file;
+                cur_in_file.ptr = fopen((source / file.name).c_str(), "r");
+                if(!cur_in_file.ptr) {
+                    error(std::format("Failed to open file: {} ({})", 
+                                      (source / file.name).string(), strerror(errno)));
+                }
+            }
+            fseek(cur_in_file.ptr, offset - cur_offset, SEEK_SET);
+            return;
+        }
+        cur_offset += file.fileSize;
     }
-    CachedReader reader(std::move(read_buffer), cache_size);
+    std::unreachable();
+}
+
+void Patcher::patch(bool inplace) {
+    cur_in_file.file = &diff.headData.oldFiles[0];
+    cur_in_file.ptr = fopen((source / cur_in_file.file->name).c_str(), "r");
+    if(!cur_in_file.ptr) {
+        error(std::format("Failed to open file: {} ({})", 
+                          (source / cur_in_file.file->name).string(), 
+                          strerror(errno)));
+    }
 
     std::filesystem::path destionation_dir = dest;
     if(inplace) {
@@ -95,12 +120,13 @@ void Patcher::patch(std::filesystem::path source, std::filesystem::path dest, bo
 
     u64 cover_idx = 0;
     i64 old_pos = 0;
-    u64 to_read = covers[0].newPos;
-    u64 written = 0;
+    u64 read_from_new_data = covers[0].newPos;
 
     for(size_t i = 0; i < diff.headData.newFiles.size(); i++) {
-        cur_file = &diff.headData.newFiles[i];
-        std::filesystem::path destionation_file = destionation_dir / cur_file->name;
+        u64 written = 0;
+
+        cur_out_file = &diff.headData.newFiles[i];
+        std::filesystem::path destionation_file = destionation_dir / cur_out_file->name;
         if(inplace) {
             dwhbll::console::info("[{}/{}] Patching {} inplace", i + 1, diff.headData.newFiles.size(),
                                   (destionation_file).string());
@@ -109,27 +135,32 @@ void Patcher::patch(std::filesystem::path source, std::filesystem::path dest, bo
             dwhbll::console::info("[{}/{}] Patching {}", i + 1, diff.headData.newFiles.size(),
                                   (destionation_file).string());
         }
-        std::ofstream f(destionation_file, std::ios::binary);
 
-        while(written < cur_file->fileSize) {
-            u64 remaining = cur_file->fileSize - written;
+        FILE* cur = fopen(destionation_file.c_str(), "w");
+        if(!cur)
+            error(std::format("Error opening file: {} ({})", destionation_file.string(),
+                              strerror(errno)));
 
-            if(to_read == 0 && cover_idx < covers.size()) {
+        while(written < cur_out_file->fileSize) {
+            u64 remaining = cur_out_file->fileSize - written;
+
+            if(read_from_new_data == 0 && cover_idx < covers.size()) {
                 // Reading a cover
                 CoverBuf::Cover& cov = covers[cover_idx];
                 old_pos += cov.oldPos;
 
                 u64 to_write = std::min(cov.length, remaining);
-                std::vector<u8> v;
-                if(!reader.seek(old_pos)) {
-                    error("Error while seeking in vfs");
+
+                update_file(old_pos);
+                if(copy_file_range(fileno(cur_in_file.ptr), nullptr, fileno(cur), 
+                                   nullptr, to_write, 0) != to_write) {
+                    error(std::format("Failed to copy data from {} to {} ({})",
+                                      (source / cur_in_file.file->name).string(),
+                                      destionation_file.string(), strerror(errno)));
                 }
-                if(!reader.read_bytes(v, to_write)) {
-                    error("Unexpected EOF");
-                }
-                assert(v.size() == to_write);
-                if(!f.write(reinterpret_cast<char*>(v.data()), to_write)) {
-                    error(std::format("Failed to write to {}", (destionation_file).string()));
+                if(fflush(cur) != 0) {
+                    error(std::format("Failed to flush file stream: {} ({})", 
+                                      destionation_file.string(), strerror(errno)));
                 }
 
                 written += to_write;
@@ -139,7 +170,7 @@ void Patcher::patch(std::filesystem::path source, std::filesystem::path dest, bo
                 // but knowing how cursed this software is, that's not impossible
                 if(remaining == to_write && remaining != cov.length) {
                     // We have written until the file end, but a part of the cover is still left
-                    to_read = 0;
+                    read_from_new_data = 0;
                     cov.length -= to_write;
                     cov.oldPos = 0;
                     cov.newPos = 0;
@@ -147,28 +178,33 @@ void Patcher::patch(std::filesystem::path source, std::filesystem::path dest, bo
                 else {
                     // We have read the whole cover
                     if(cover_idx + 1 < covers.size())
-                        to_read = covers[cover_idx + 1].newPos;
+                        read_from_new_data = covers[cover_idx + 1].newPos;
                     cover_idx++;
                 }
             }
             else {
                 u64 to_write = remaining;
                 if(cover_idx < covers.size()) {
-                    to_write = std::min(remaining, to_read);
+                    to_write = std::min(remaining, read_from_new_data);
                 }
                 std::vector<u8> v(to_write);
                 read(v.data(), to_write);
-                f.write(reinterpret_cast<char*>(v.data()), to_write);
-                to_read -= to_write;
+                if(fwrite(reinterpret_cast<char*>(v.data()), 1, to_write, cur) != to_write) {
+                    error(std::format("Failed to write to file: {} ({})", 
+                                      destionation_file.string(), strerror(errno)));
+                }
+                if(fflush(cur) != 0) {
+                    error(std::format("Failed to flush file stream: {} ({})", 
+                                      destionation_file.string(), strerror(errno)));
+                }
+                read_from_new_data -= to_write;
                 written += to_write;
             }
         }
 
-        written = 0;
-        dwhbll::console::info("[{}/{}] Successfully patched {}",
-                              i + 1, 
+        dwhbll::console::info("[{}/{}] Patched {}", i + 1, 
                               diff.headData.newFiles.size(), 
-                              (dest / cur_file->name).string());
+                              (dest / cur_out_file->name).string());
     }
 
     if(inplace) {
