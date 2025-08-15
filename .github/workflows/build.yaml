@@ -34,6 +34,10 @@ jobs:
     strategy:
       matrix:
         diff_number: [ 0, 1, 2, 3, 5, 7]
+        include:
+          - api: https://hw-pcdownload-qcloud.aki-game.net/launcher/game/G153/50004/2.5.1/IYOwHBLfeAXMxVgHwGybWvvSqiDnPlbs/resource/50004/2.5.1/2.4.3/indexFile.json
+          - base_url: https://hw-pcdownload-aws.aki-game.net/launcher/game/G153/50004/2.4.3/SZqhxsTkRdyUlZaLhFuJobLKYodsAwan/zip
+          - patch_url: https://hw-pcdownload-aws.aki-game.net/launcher/game/G153/50004/2.5.0/jLYdEEVBgAgPqJgUZlVztdMPFnUJnRjQ/resource/50004/2.5.0/2.4.3/resources
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v5
@@ -42,9 +46,9 @@ jobs:
           path: .
       - name: Download files
         run: |
-          export API="https://hw-pcdownload-qcloud.aki-game.net/launcher/game/G153/50004/2.5.1/IYOwHBLfeAXMxVgHwGybWvvSqiDnPlbs/resource/50004/2.5.1/2.4.3/indexFile.json"
-          export BASE_URL="https://hw-pcdownload-aws.aki-game.net/launcher/game/G153/50004/2.4.3/SZqhxsTkRdyUlZaLhFuJobLKYodsAwan/zip"
-          export PATCH_URL="https://hw-pcdownload-aws.aki-game.net/launcher/game/G153/50004/2.5.0/jLYdEEVBgAgPqJgUZlVztdMPFnUJnRjQ/resource/50004/2.5.0/2.4.3/resources"
+          export API='${{ matrix.api }}'
+          export BASE_URL='${{ matrix.base_url }}'
+          export PATCH_URL='${{ matrix.patch_url }}'
 
           mkdir testfiles
           curl -L "$API" | jq -r '.groupInfos[${{ matrix.diff_number }}].srcFiles[].dest' \
